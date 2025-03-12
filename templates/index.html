@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Financial Dashboard</h1>
+    
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5>Total Income</h5>
+                    <h3>${{ income|round(2) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h5>Total Expenses</h5>
+                    <h3>${{ expenses|round(2) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5>Balance</h5>
+                    <h3>${{ balance|round(2) }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Expense Categories</h5>
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Monthly Breakdown</h5>
+                    <canvas id="barChart"></canvas> <!-- Bar Chart Canvas -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sankey Diagram -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Income & Expense Flow</h5>
+            <div id="sankey"></div>
+        </div>
+    </div>
+
+    <!-- Transaction Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Add Transaction</h5>
+            <form method="POST" action="/add_transaction">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <input type="number" step="0.01" class="form-control" name="amount" placeholder="Amount" required>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" name="type" required>
+                            <option value="income">Income</option>
+                            <option value="expense">Expense</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" class="form-control" name="category" placeholder="Category" required>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="date" class="form-control" name="date" value="{{ datetime.now().strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    <div class="col-12">
+                        <textarea class="form-control" name="description" placeholder="Description"></textarea>
+                        <button type="submit" class="btn btn-primary mt-2">Add Transaction</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+
+<script>
+// Pie Chart
+const pieCtx = document.getElementById('pieChart').getContext('2d');
+new Chart(pieCtx, {
+    type: 'pie',
+    data: {
+        labels: {{ expense_categories|map(attribute='name')|list|tojson }},
+        datasets: [{
+            data: {{ expense_data|tojson }},
+            backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF']
+        }]
+    }
+});
+
+// Bar Chart
+const barCtx = document.getElementById('barChart').getContext('2d');
+new Chart(barCtx, {
+    type: 'bar',
+    data: {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        datasets: [{
+            label: 'Income',
+            data: [65, 59, 80, 81, 56, 55],
+            backgroundColor: '#4BC0C0'
+        }, {
+            label: 'Expenses',
+            data: [28, 48, 40, 19, 86, 27],
+            backgroundColor: '#FF6384'
+        }]
+    }
+});
+
+// Sankey Diagram
+const sankeyData = {{ sankey_data|safe }};
+const width = 800;
+const height = 400;
+
+const svg = d3.select("#sankey")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+const sankey = d3.sankey()
+    .nodeWidth(15)
+    .nodePadding(10)
+    .size([width, height]);
+
+const graph = sankey({
+    nodes: sankeyData.nodes,
+    links: sankeyData.links
+});
+
+svg.append("g")
+    .selectAll("rect")
+    .data(graph.nodes)
+    .join("rect")
+    .attr("x", d => d.x0)
+    .attr("y", d => d.y0)
+    .attr("height", d => d.y1 - d.y0)
+    .attr("width", d => d.x1 - d.x0)
+    .attr("fill", "#4BC0C0");
+
+svg.append("g")
+    .selectAll("path")
+    .data(graph.links)
+    .join("path")
+    .attr("d", d3.sankeyLinkHorizontal())
+    .attr("stroke-width", d => Math.max(1, d.width))
+    .attr("stroke", "#999")
+    .attr("opacity", 0.5);
+
+svg.append("g")
+    .selectAll("text")
+    .data(graph.nodes)
+    .join("text")
+    .attr("x", d => d.x0 - 6)
+    .attr("y", d => (d.y1 + d.y0) / 2)
+    .attr("text-anchor", "end")
+    .text(d => d.name);
+</script>
+{% endblock %}
